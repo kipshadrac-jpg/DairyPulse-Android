@@ -1,6 +1,8 @@
 <resources>
     <style name="Theme.DairyPulse" parent="android:Theme.Material.Light.NoActionBar">
-        <item name="android:statusBarColor">#1B5E20</item>
-        <item name="android:windowBackground">#F5F6F8</item>
+        <item name="android:statusBarColor">#F6F1E7</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:navigationBarColor">#FBF8F1</item>
+        <item name="android:windowBackground">#F6F1E7</item>
     </style>
 </resources>

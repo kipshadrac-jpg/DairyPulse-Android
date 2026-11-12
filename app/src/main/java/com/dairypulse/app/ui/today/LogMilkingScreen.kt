@@ -1,5 +1,9 @@
 package com.dairypulse.app.ui.today
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,10 +14,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Check
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -23,25 +27,34 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dairypulse.app.data.CowStatus
 import com.dairypulse.app.data.MilkRecord
 import com.dairypulse.app.data.Session
-import com.dairypulse.app.ui.common.ChipRow
+import com.dairypulse.app.ui.common.Avatar
+import com.dairypulse.app.ui.common.CompactNumber
 import com.dairypulse.app.ui.common.DateField
+import com.dairypulse.app.ui.common.Label
+import com.dairypulse.app.ui.common.Muted
 import com.dairypulse.app.ui.common.NumberField
-import com.dairypulse.app.ui.common.SectionTitle
+import com.dairypulse.app.ui.common.PrimaryButton
+import com.dairypulse.app.ui.common.RowDivider
+import com.dairypulse.app.ui.common.SectionHeader
+import com.dairypulse.app.ui.common.Segmented
+import com.dairypulse.app.ui.common.Serif
+import com.dairypulse.app.ui.common.Strong
 import com.dairypulse.app.ui.common.money
 import com.dairypulse.app.ui.common.num
 import com.dairypulse.app.ui.common.rememberApp
 import com.dairypulse.app.ui.common.toAmount
+import com.dairypulse.app.ui.theme.Dp
 import java.time.LocalDate
 
 /**
  * Log one milking session. Litres can be entered per cow (feeds the Herd yields and
- * "Head Milked") and/or as one bulk figure. Re-opening the same date + session edits it.
+ * "Head milked") and/or as one bulk figure. Re-opening the same date + session edits it.
  */
 @Composable
 fun LogMilkingScreen(onDone: () -> Unit) {
@@ -72,59 +85,79 @@ fun LogMilkingScreen(onDone: () -> Unit) {
     val total = perCow.values.sumOf { it.toAmount() ?: 0.0 } + (bulk.toAmount() ?: 0.0)
     val priceValue = price.toAmount() ?: 0.0
 
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(16.dp)) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
         item {
-            DateField("Date", date, { if (it != null) date = it })
-            Spacer(Modifier.height(8.dp))
-            ChipRow(Session.entries, session, { it.label }) { session = it }
-            if (editing) {
-                Text(
-                    "This session was already logged; saving will replace it.",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            Spacer(Modifier.height(8.dp))
-            NumberField(price, { price = it }, "Milk price per litre", suffix = settings.currency)
-            SectionTitle(if (inMilk.isEmpty()) "Herd total" else "Litres per cow (${inMilk.size} in milk)")
-            if (inMilk.isEmpty()) {
-                Text(
-                    "Tip: add cows in the Herd tab to track yield per cow.",
-                    style = MaterialTheme.typography.bodySmall,
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    DateField("Date", date, { if (it != null) date = it }, Modifier.weight(1f))
+                    NumberField(price, { price = it }, "Price per litre", Modifier.weight(1f), suffix = settings.currency)
+                }
+                Segmented(Session.entries, session, { it.label }) { session = it }
+                if (editing) Muted("This session was already logged; saving will replace it.", color = Dp.Green, weight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                SectionHeader(if (inMilk.isEmpty()) "Herd total" else "Litres per cow") {
+                    if (inMilk.isNotEmpty()) Label("${inMilk.size} in milk")
+                }
+                if (inMilk.isEmpty()) Muted("Tip: add cows in the Herd tab to track yield per cow.")
+                Spacer(Modifier.height(2.dp))
             }
         }
-        items(inMilk, key = { it.id }) { cow ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(cow.displayName, Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.width(8.dp))
-                NumberField(perCow[cow.id] ?: "", { perCow[cow.id] = it }, "Litres", Modifier.weight(1f))
-            }
-        }
-        item {
-            Spacer(Modifier.height(8.dp))
-            NumberField(bulk, { bulk = it }, if (inMilk.isEmpty()) "Total litres" else "Extra / untagged litres (optional)", suffix = "L")
-            Spacer(Modifier.height(12.dp))
-            Column {
-                Text("Session total: ${num(total)} L", fontWeight = FontWeight.Bold)
-                Text("Value: ${money(settings.currency, total * priceValue)}")
-            }
-            Spacer(Modifier.height(12.dp))
-            Button(
-                onClick = {
-                    val records = buildList {
-                        perCow.forEach { (id, v) ->
-                            val l = v.toAmount()
-                            if (l != null && l > 0) add(MilkRecord(0, date, session, id, l, priceValue))
-                        }
-                        bulk.toAmount()?.takeIf { it > 0 }?.let { add(MilkRecord(0, date, session, null, it, priceValue)) }
+        itemsIndexed(inMilk, key = { _, c -> c.id }) { i, cow ->
+            val first = i == 0
+            val last = i == inMilk.lastIndex
+            val shape = RoundedCornerShape(
+                topStart = if (first) 22.dp else 0.dp, topEnd = if (first) 22.dp else 0.dp,
+                bottomStart = if (last) 22.dp else 0.dp, bottomEnd = if (last) 22.dp else 0.dp,
+            )
+            Column(Modifier.fillMaxWidth().clip(shape).background(Dp.Card)) {
+                if (!first) Box(Modifier.padding(horizontal = 16.dp)) { RowDivider() }
+                Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Avatar(cow.name, 40.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Strong(cow.name)
+                        if (cow.tag.isNotBlank()) Muted("#${cow.tag}")
                     }
-                    app.launchIo { milk().replaceSession(date, session, records) }
-                    onDone()
-                },
-                enabled = priceValue > 0 && (total > 0 || editing),
-                modifier = Modifier.fillMaxWidth(),
-            ) { Text(if (editing) "Update ${session.label} Milking" else "Save ${session.label} Milking") }
+                    CompactNumber(perCow[cow.id] ?: "", { perCow[cow.id] = it }, "Litres for ${cow.displayName}", "L", Modifier.width(120.dp))
+                }
+            }
+        }
+        item {
+            Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                NumberField(bulk, { bulk = it }, if (inMilk.isEmpty()) "Total litres" else "Extra or untagged litres (optional)", suffix = "L")
+                Column(
+                    Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Dp.CreamDeep)
+                        .border(1.dp, Dp.Border, RoundedCornerShape(22.dp)).padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Column(Modifier.weight(1f)) {
+                            Label("Session total")
+                            Serif("${num(total)} L", 30, Modifier.padding(top = 4.dp), color = Dp.GreenValue)
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Label("Value")
+                            Strong(money(settings.currency, total * priceValue), size = 18, modifier = Modifier.padding(top = 6.dp))
+                        }
+                    }
+                    PrimaryButton(
+                        if (editing) "Update ${session.label.lowercase()} milking" else "Save ${session.label.lowercase()} milking",
+                        onClick = {
+                            val records = buildList {
+                                perCow.forEach { (id, v) ->
+                                    val l = v.toAmount()
+                                    if (l != null && l > 0) add(MilkRecord(0, date, session, id, l, priceValue))
+                                }
+                                bulk.toAmount()?.takeIf { it > 0 }?.let { add(MilkRecord(0, date, session, null, it, priceValue)) }
+                            }
+                            app.launchIo { milk().replaceSession(date, session, records) }
+                            onDone()
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = Icons.Outlined.Check,
+                        enabled = priceValue > 0 && (total > 0 || editing),
+                    )
+                }
+            }
         }
     }
 }

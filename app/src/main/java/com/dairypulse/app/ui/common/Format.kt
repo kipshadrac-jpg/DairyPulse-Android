@@ -5,8 +5,20 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.abs
 
-fun money(currency: String, amount: Double): String =
-    "$currency " + String.format(Locale.US, "%,.2f", amount)
+/** "KSh 14,250" – whole amounts by default; pass decimals = 2 for rates like price per kg. */
+fun money(currency: String, amount: Double, decimals: Int = 0): String {
+    val sign = if (amount < 0) "−" else ""
+    return "$sign$currency " + String.format(Locale.US, "%,.${decimals}f", abs(amount))
+}
+
+/** Price per unit, e.g. "KSh 42.00". */
+fun rate(currency: String, amount: Double): String = money(currency, amount, 2)
+
+/** Plain grouped number without currency, e.g. "41,500". */
+fun whole(amount: Double): String {
+    val sign = if (amount < 0) "−" else ""
+    return sign + String.format(Locale.US, "%,.0f", abs(amount))
+}
 
 /** "41.5k" style used on the summary card. */
 fun compact(amount: Double): String = when {

@@ -7,13 +7,22 @@ import kotlinx.coroutines.flow.asStateFlow
 
 data class FarmSettings(
     val farmName: String = "My Dairy Farm",
-    val currency: String = "KES",
+    val currency: String = "KSh",
     val milkPricePerLiter: Double = 50.0,
 )
 
 /** Small settings store on SharedPreferences, which Auto Backup also copies. */
 class SettingsStore(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
+    init {
+        // One-time switch of the old default label "KES" to "KSh".
+        if (!prefs.getBoolean("currencyMigrated", false)) {
+            val edit = prefs.edit().putBoolean("currencyMigrated", true)
+            if (prefs.getString("currency", null) == "KES") edit.putString("currency", "KSh")
+            edit.apply()
+        }
+    }
+
     private val state = MutableStateFlow(read())
     val settings: StateFlow<FarmSettings> = state.asStateFlow()
 

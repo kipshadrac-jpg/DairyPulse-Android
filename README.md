@@ -51,6 +51,16 @@ artifact `DairyPulse-debug-apk`**).
 To publish on Google Play you will need a release signing key; see
 <https://developer.android.com/studio/publish/app-signing>.
 
+## Look and feel
+
+Cream background, deep green accents, Fraunces serif headings and Manrope text,
+rounded cards and figure tiles, slide-up form sheets and a compact bottom
+navigation bar. Money shows as `KSh` by default (changeable in Settings).
+
+Fonts are bundled in `app/src/main/res/font/` so the app works fully offline:
+[Fraunces](https://github.com/undercasetype/Fraunces) and
+[Manrope](https://github.com/sharanda/manrope), both under the SIL Open Font License 1.1.
+
 ## Tech
 
 Kotlin, Jetpack Compose (Material 3), Room, Navigation Compose, WorkManager.

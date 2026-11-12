@@ -3,23 +3,24 @@ package com.dairypulse.app.ui.money
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PictureAsPdf
-import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.automirrored.outlined.TrendingDown
+import androidx.compose.material.icons.automirrored.outlined.TrendingUp
+import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -29,36 +30,46 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dairypulse.app.data.Categories
 import com.dairypulse.app.data.Transaction
 import com.dairypulse.app.data.TxType
 import com.dairypulse.app.domain.ProfitAndLoss
 import com.dairypulse.app.domain.profitAndLoss
-import com.dairypulse.app.ui.common.ChipRow
 import com.dairypulse.app.ui.common.DateField
+import com.dairypulse.app.ui.common.DpCard
 import com.dairypulse.app.ui.common.Dropdown
 import com.dairypulse.app.ui.common.FormDialog
-import com.dairypulse.app.ui.common.InfoCard
+import com.dairypulse.app.ui.common.Label
+import com.dairypulse.app.ui.common.Muted
 import com.dairypulse.app.ui.common.NumberField
-import com.dairypulse.app.ui.common.SectionTitle
+import com.dairypulse.app.ui.common.OutlineButton
+import com.dairypulse.app.ui.common.PageIntro
+import com.dairypulse.app.ui.common.RowDivider
+import com.dairypulse.app.ui.common.SectionHeader
+import com.dairypulse.app.ui.common.Segmented
+import com.dairypulse.app.ui.common.Serif
+import com.dairypulse.app.ui.common.SoftButton
+import com.dairypulse.app.ui.common.StatTile
+import com.dairypulse.app.ui.common.Strong
 import com.dairypulse.app.ui.common.TextInput
+import com.dairypulse.app.ui.common.TileRow
+import com.dairypulse.app.ui.common.compact
 import com.dairypulse.app.ui.common.money
 import com.dairypulse.app.ui.common.num
 import com.dairypulse.app.ui.common.pretty
 import com.dairypulse.app.ui.common.rememberApp
 import com.dairypulse.app.ui.common.toAmount
-import com.dairypulse.app.ui.theme.FarmGreen
-import com.dairypulse.app.ui.theme.FarmGreenLight
-import com.dairypulse.app.ui.theme.LossRed
+import com.dairypulse.app.ui.common.whole
+import com.dairypulse.app.ui.theme.Dp
 import java.time.LocalDate
+import kotlin.math.abs
 
-enum class PnlPeriod(val label: String, val days: Long) { TODAY("Today", 1), WEEK("7 Days", 7), MONTH("30 Days", 30) }
+enum class PnlPeriod(val label: String, val days: Long) { TODAY("Today", 1), WEEK("7 days", 7), MONTH("30 days", 30) }
 
 @Composable
 fun MoneyScreen() {
@@ -80,31 +91,30 @@ fun MoneyScreen() {
     var editTx by remember { mutableStateOf<Transaction?>(null) }
 
     val pnl = profitAndLoss(from, to, milk, feed, overheads, txs, calf)
+    val feedKg = feed.filter { !it.date.isBefore(from) }.sumOf { it.kg }
+    val feedShare = if (pnl.totalExpenses > 0) pnl.feedCost / pnl.totalExpenses * 100 else 0.0
+    fun big(v: Double) = if (abs(v) >= 100_000) compact(v) else whole(v)
 
-    Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = androidx.compose.foundation.layout.Arrangement.Center) {
-            ChipRow(PnlPeriod.entries, period, { it.label }) { period = it }
+    Column(
+        Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 22.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        PageIntro("Profit & loss", "Money", "Milk sales against feed, labour, machinery and transport costs.")
+        Segmented(PnlPeriod.entries, period, { it.label }) { period = it }
+
+        PnlCard(pnl, cur, period, feedKg)
+
+        TileRow {
+            StatTile("Revenue", big(pnl.totalRevenue), Dp.GreenValue, "$cur · all income", Modifier.weight(1f), valueSize = 26)
+            StatTile("Total costs", big(pnl.totalExpenses), Dp.Clay, "$cur · feed + overheads", Modifier.weight(1f), valueSize = 26)
         }
-        Spacer(Modifier.height(8.dp))
-        Column(
-            Modifier.fillMaxWidth().background(if (pnl.netProfit < 0) LossRed else FarmGreenLight, RoundedCornerShape(12.dp)).padding(16.dp),
-        ) {
-            Text(
-                (if (period == PnlPeriod.TODAY) "TODAY'S" else "${period.days}-DAY") + " NET PROFIT",
-                color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp,
-            )
-            Text(money(cur, pnl.netProfit), color = Color.White, fontSize = 28.sp, fontWeight = FontWeight.Bold)
-            Text(
-                "Margin: ${num(pnl.marginPct)}% • Profit/L: ${money(cur, pnl.profitPerLiter)}",
-                color = Color.White, fontSize = 13.sp,
-            )
+        TileRow {
+            StatTile("Profit / litre", num(pnl.profitPerLiter, 2), Dp.Slate, "$cur · ${num(pnl.milkLiters)} L", Modifier.weight(1f), valueSize = 26)
+            StatTile("Feed share", "${num(feedShare, 0)}%", Dp.Ochre, "of all costs", Modifier.weight(1f), valueSize = 26)
         }
 
-        SectionTitle("P&L Breakdown (${period.label})")
-        InfoCard { PnlTable(pnl, cur) }
-
-        Spacer(Modifier.height(8.dp))
-        FilledTonalButton(
+        SoftButton(
+            "Export ${period.label} PDF report",
             onClick = {
                 runCatching { PdfExporter.export(context, settings, pnl, period.label) }
                     .onSuccess { uri ->
@@ -119,69 +129,85 @@ fun MoneyScreen() {
                     .onFailure { Toast.makeText(context, "Could not create PDF: ${it.message}", Toast.LENGTH_LONG).show() }
             },
             modifier = Modifier.fillMaxWidth(),
-        ) { Icon(Icons.Default.PictureAsPdf, null); Text("  Export ${period.label} PDF Report") }
+            icon = Icons.Outlined.Description,
+        )
 
-        Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-            SectionTitle("Other Income & Expenses", Modifier.weight(1f))
-        }
-        Row {
-            OutlinedButton(onClick = { editTx = Transaction(date = to, type = TxType.EXPENSE, category = Categories.VET, amount = 0.0) }, Modifier.weight(1f)) { Text("+ Expense") }
-            Spacer(Modifier.padding(4.dp))
-            OutlinedButton(onClick = { editTx = Transaction(date = to, type = TxType.INCOME, category = Categories.income.first(), amount = 0.0) }, Modifier.weight(1f)) { Text("+ Income") }
+        SectionHeader("Other income & costs")
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlineButton("− Expense", { editTx = Transaction(date = to, type = TxType.EXPENSE, category = Categories.VET, amount = 0.0) }, Modifier.weight(1f), color = Dp.Clay)
+            OutlineButton("+ Income", { editTx = Transaction(date = to, type = TxType.INCOME, category = Categories.income.first(), amount = 0.0) }, Modifier.weight(1f), color = Dp.GreenValue)
         }
         val shownTx = txs.filter { !it.date.isBefore(from) }
         if (shownTx.isEmpty()) {
-            Text(
-                "One-off costs (vet, repairs, transport) and extra income (animal or manure sales). Milk sales come from the milking log.",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-        shownTx.forEach { t ->
-            InfoCard(onClick = { editTx = t }) {
-                Row {
-                    Column(Modifier.weight(1f)) {
-                        Text(t.category, fontWeight = FontWeight.SemiBold)
-                        Text(t.date.pretty() + if (t.note.isNotBlank()) " • ${t.note}" else "", style = MaterialTheme.typography.bodySmall)
+            Muted("One-off costs (vet, repairs, transport) and extra income (animal or manure sales). Milk sales come from the milking log.")
+        } else {
+            DpCard(padding = 0.dp) {
+                shownTx.forEachIndexed { i, t ->
+                    if (i > 0) Box(Modifier.padding(horizontal = 18.dp)) { RowDivider() }
+                    Row(
+                        Modifier.fillMaxWidth().clickable { editTx = t }.padding(horizontal = 18.dp, vertical = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            Strong(t.category)
+                            Muted(t.date.pretty() + if (t.note.isNotBlank()) " · ${t.note}" else "")
+                        }
+                        Strong(
+                            (if (t.type == TxType.EXPENSE) "−" else "+") + whole(t.amount),
+                            color = if (t.type == TxType.EXPENSE) Dp.Clay else Dp.GreenValue, weight = FontWeight.ExtraBold,
+                        )
                     }
-                    Text(
-                        (if (t.type == TxType.EXPENSE) "- " else "+ ") + money(cur, t.amount),
-                        color = if (t.type == TxType.EXPENSE) LossRed else FarmGreen,
-                    )
                 }
             }
         }
-        Spacer(Modifier.height(16.dp))
+        Spacer(Modifier.height(4.dp))
     }
 
     editTx?.let { TransactionDialog(it, cur) { editTx = null } }
 }
 
 @Composable
-private fun PnlTable(pnl: ProfitAndLoss, cur: String) {
-    @Composable
-    fun line(label: String, amount: Double, negative: Boolean = false, bold: Boolean = false) {
-        Row(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            Text(label, Modifier.weight(1f), fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal)
-            Text(
-                (if (negative) "- " else "") + money(cur, amount),
-                color = when {
-                    negative -> LossRed
-                    bold && amount < 0 -> LossRed
-                    bold -> FarmGreen
-                    else -> MaterialTheme.colorScheme.onSurface
-                },
-                fontWeight = if (bold || !negative) FontWeight.Bold else FontWeight.Normal,
-            )
+private fun PnlCard(pnl: ProfitAndLoss, cur: String, period: PnlPeriod, feedKg: Double) {
+    val loss = pnl.netProfit < 0
+    DpCard(padding = 0.dp, radius = 26.dp) {
+        Row(
+            Modifier.fillMaxWidth().background(Dp.CreamDeep).padding(22.dp),
+            verticalAlignment = Alignment.Bottom,
+        ) {
+            Column(Modifier.weight(1f)) {
+                Label(if (period == PnlPeriod.TODAY) "Net · today" else "Net · last ${period.days} days")
+                Serif(money(cur, pnl.netProfit), 34, Modifier.padding(top = 8.dp), color = if (loss) Dp.Clay else Dp.GreenValue)
+            }
+            if (pnl.totalRevenue > 0) {
+                Row(
+                    Modifier.clip(RoundedCornerShape(50)).background(if (loss) Dp.ClayTint else Dp.GreenPill).padding(horizontal = 12.dp, vertical = 7.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        if (loss) Icons.AutoMirrored.Outlined.TrendingDown else Icons.AutoMirrored.Outlined.TrendingUp, null,
+                        tint = if (loss) Dp.Clay else Dp.GreenDark, modifier = Modifier.size(16.dp),
+                    )
+                    Strong(" ${num(pnl.marginPct)}%", size = 13, color = if (loss) Dp.Clay else Dp.GreenDark, weight = FontWeight.ExtraBold)
+                }
+            }
         }
+        PnlLineRow("Milk sales", "${num(pnl.milkLiters)} litres sold", money(cur, pnl.milkSales), Dp.GreenValue)
+        pnl.otherIncome.forEach { PnlLineRow(it.label, "other income", money(cur, it.amount), Dp.GreenValue) }
+        PnlLineRow("Feed cost", "${num(feedKg)} kg fed", money(cur, -pnl.feedCost), Dp.Clay)
+        pnl.expenses.forEach { PnlLineRow(it.label, null, money(cur, -it.amount), Dp.Clay) }
     }
-    line("Gross Milk Sales (${num(pnl.milkLiters)} L)", pnl.milkSales)
-    pnl.otherIncome.forEach { line(it.label, it.amount) }
-    HorizontalDivider()
-    line("- Feed Expenses", pnl.feedCost, negative = true)
-    pnl.expenses.forEach { line("- ${it.label}", it.amount, negative = true) }
-    HorizontalDivider()
-    line("Net Farm Profit", pnl.netProfit, bold = true)
+}
+
+@Composable
+private fun PnlLineRow(title: String, caption: String?, value: String, color: androidx.compose.ui.graphics.Color) {
+    RowDivider()
+    Row(Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 15.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Strong(title, size = 16)
+            if (caption != null) Muted(caption)
+        }
+        Strong(value, color = color, weight = FontWeight.ExtraBold)
+    }
 }
 
 @Composable
@@ -195,7 +221,8 @@ private fun TransactionDialog(initial: Transaction, cur: String, onDismiss: () -
     val categories = if (type == TxType.EXPENSE) Categories.expense else Categories.income
     val value = amount.toAmount()
     FormDialog(
-        title = if (initial.id == 0L) "New ${if (type == TxType.EXPENSE) "Expense" else "Income"}" else "Edit Entry",
+        title = if (initial.id == 0L) (if (type == TxType.EXPENSE) "New expense" else "New income") else "Edit entry",
+        eyebrow = "Money",
         onDismiss = onDismiss,
         saveEnabled = value != null && value > 0,
         onSave = {
@@ -204,7 +231,7 @@ private fun TransactionDialog(initial: Transaction, cur: String, onDismiss: () -
         },
         onDelete = if (initial.id != 0L) ({ app.launchIo { money().deleteTransaction(initial) }; onDismiss() }) else null,
     ) {
-        ChipRow(TxType.entries, type, { if (it == TxType.EXPENSE) "Expense" else "Income" }) {
+        Segmented(TxType.entries, type, { if (it == TxType.EXPENSE) "Expense" else "Income" }) {
             type = it
             category = (if (it == TxType.EXPENSE) Categories.expense else Categories.income).first()
         }

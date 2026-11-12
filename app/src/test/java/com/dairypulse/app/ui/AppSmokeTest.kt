@@ -3,7 +3,9 @@ package com.dairypulse.app.ui
 import android.graphics.Bitmap
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
@@ -55,6 +57,8 @@ class AppSmokeTest {
         File(dir, "$name.png").outputStream().use { bmp.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 
+    private fun tab(name: String) = rule.onNode(hasText(name) and isSelectable()).performClick()
+
     private fun waitForText(text: String) = rule.waitUntil(5_000) {
         rule.onAllNodesWithText(text, substring = true).fetchSemanticsNodes().isNotEmpty()
     }
@@ -81,39 +85,39 @@ class AppSmokeTest {
         rule.onNodeWithText("TODAY'S NET PROFIT").assertIsDisplayed()
 
         // Log a milking session per cow
-        rule.onNodeWithText("Log Milking", substring = true).performClick()
-        waitForText("Daisy (#001)")
+        rule.onNodeWithText("Log milking").performClick()
+        waitForText("Daisy")
         rule.onNodeWithText("Midday").performClick()
-        rule.onAllNodes(hasSetTextAction() and hasText("Litres")).onFirst().performTextInput("12.5")
+        rule.onAllNodes(hasSetTextAction() and hasContentDescription("Litres for", substring = true)).onFirst().performTextInput("12.5")
         shot("02_log_milking")
-        rule.onAllNodesWithText("Save", substring = true).onFirst().performClick()
+        rule.onNodeWithText("Save midday milking").performClick()
         rule.waitForIdle()
         waitForText("12.5 L")
         shot("01_today")
-        rule.onNodeWithText("Feed").performClick()
-        waitForText("50.00 / kg")
+        tab("Feed")
+        waitForText("KSh 50.00")
         shot("03_feed")
 
         // Herd
-        rule.onNodeWithText("Herd").performClick()
-        waitForText("Due in: 18 days")
-        rule.onNodeWithText("Calves & Rearing Expenses").assertIsDisplayed()
+        tab("Herd")
+        waitForText("Calving in 18 days")
+        rule.onNodeWithText("Calves & young stock").assertExists()
         shot("04_herd")
 
         // Cow profile
-        rule.onNodeWithText("Bossy (#002)").performClick()
-        waitForText("Recent Milk Records")
+        rule.onNodeWithText("Bossy").performClick()
+        waitForText("Recent milk")
         shot("05_cow")
         rule.activityRule.scenario.onActivity { it.onBackPressedDispatcher.onBackPressed() }
 
         // Schedule
-        rule.onNodeWithText("Schedule").performClick()
-        waitForText("Calvings (next 90 days)")
+        tab("Schedule")
+        waitForText("Calvings · next 90 days")
         shot("06_schedule")
 
         // Money
-        rule.onNodeWithText("Money").performClick()
-        waitForText("Net Farm Profit")
+        tab("Money")
+        waitForText("litres sold")
         shot("07_money")
 
         // Settings

@@ -11,6 +11,7 @@ import com.dairypulse.app.data.FarmSettings
 import com.dairypulse.app.domain.ProfitAndLoss
 import com.dairypulse.app.ui.common.money
 import com.dairypulse.app.ui.common.num
+import com.dairypulse.app.ui.common.rate
 import com.dairypulse.app.ui.common.pretty
 import java.io.File
 import java.time.LocalDateTime
@@ -56,7 +57,7 @@ object PdfExporter {
         row("Milk produced", "${num(pnl.milkLiters)} L")
         row("Net profit", money(cur, pnl.netProfit), valueColor = if (pnl.netProfit < 0) red else green, valueBold = true)
         row("Profit margin", "${num(pnl.marginPct)} %")
-        row("Profit per litre", money(cur, pnl.profitPerLiter))
+        row("Profit per litre", rate(cur, pnl.profitPerLiter))
         y += 16f
 
         c.drawText("Breakdown", M, y, bold); y += 24f

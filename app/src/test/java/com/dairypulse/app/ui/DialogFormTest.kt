@@ -1,12 +1,17 @@
 package com.dairypulse.app.ui
 
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isSelectable
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTextInput
 import com.dairypulse.app.DairyPulseApp
 import com.dairypulse.app.MainActivity
@@ -27,13 +32,15 @@ class DialogFormTest {
     /** Type into the Add Ingredient dialog and check the row is saved. */
     @Test
     fun addIngredientThroughDialog() {
-        rule.onNodeWithText("Feed").performClick()
+        rule.onNode(hasText("Feed") and isSelectable()).performClick()
         rule.onAllNodesWithText("Add").onFirst().performClick()
-        rule.onNode(hasSetTextAction() and hasText("Name (e.g. Dairy Meal)")).performTextInput("Dairy Meal")
-        rule.onNode(hasSetTextAction() and hasText("Pack size")).performTextInput("50")
-        rule.onNode(hasSetTextAction() and hasText("Pack price")).performTextInput("2500")
-        rule.onNodeWithText("= 50 per kg").assertExists()
-        rule.onNodeWithText("Save").performClick()
+        rule.onNode(hasSetTextAction() and hasContentDescription("Name (e.g. Dairy Meal)")).performTextInput("Dairy Meal")
+        rule.onNode(hasSetTextAction() and hasContentDescription("Pack size")).performTextInput("50")
+        rule.onNode(hasSetTextAction() and hasContentDescription("Pack price")).performTextInput("2500")
+        rule.onNodeWithText("KSh 50.00 /kg").assertExists()
+        // Robolectric's small default window puts the sheet's Save at its very edge, so press it
+        // through its click action rather than a coordinate tap.
+        rule.onNode(hasClickAction() and hasText("Save")).performSemanticsAction(SemanticsActions.OnClick)
         rule.waitUntil(5_000) {
             runBlocking { app.db.feed().ingredients().first() }.any { it.name == "Dairy Meal" && it.pricePerKg == 50.0 }
         }
