@@ -1,4 +1,4 @@
-# DairyPulse
+# DairyDesk
 
 A dairy farm record and profit app for Android. Everything runs on the phone:
 there is **no server and no account to create**.
@@ -7,15 +7,17 @@ there is **no server and no account to create**.
 
 | Tab | What it does |
 |---|---|
-| **Today** | Today's net profit (sales vs feed vs other costs), milk per session compared with the morning, milk/feed totals, head milked and dry cows. Log milking (per cow or as a bulk total) and feeding rounds. |
+| **Today** | A full-width farm header with your farm name and cover photo, the greeting, date and time, and today's net profit (sales vs feed vs other costs). Below it: milk per session compared with the morning, milk/feed totals, head milked and dry cows. Log milking (per cow or as a bulk total, minus any milk fed to calves) and feeding rounds. The phone's status bar is hidden on this page; swipe down to see it. |
 | **Feed** | Ingredient library (price per kg from pack size and price), ration recipes with automatic cost per kg, and recurring overheads (monthly costs are split across the days of each month). |
-| **Herd** | Cows with status, days in milk and today's yield; red warning when a cow is due to calve within 21 days; calves and heifers with their rearing costs (feed vs upkeep). |
+| **Herd** | Cows as photo cards, two to a row (take a photo or pick one from the gallery on each animal's profile); red warning when a cow is due to calve within 21 days; calves and heifers with their rearing costs (feed vs upkeep). |
 | **Schedule** | Upcoming calvings, dry-off reminders (≈60 days before calving) and your own tasks. A daily notification lists what is due. |
 | **Money** | Profit & loss for Today / 7 days / 30 days, other income and expenses, and a PDF report you can share by Gmail, WhatsApp or save to Drive. |
 
 ## Where the data lives and how it is backed up
 
 * All records are stored in a local database on the phone (Room / SQLite).
+  Cow and farm photos are shrunk (about 100–300 KB each) and kept in the
+  app's private storage.
 * **Android Auto Backup** copies the database and settings to the user's
   Google account (Google Drive app data, not visible in the Drive file list)
   roughly once a day when the phone is **idle, charging and on Wi-Fi**.
@@ -46,10 +48,22 @@ Requirements: JDK 17+, Android SDK 35.
 ```
 
 Every push also builds the APK on GitHub Actions (**Actions → Build APK →
-artifact `DairyPulse-debug-apk`**).
+artifact `DairyDesk-debug-apk`**).
 
 To publish on Google Play you will need a release signing key; see
 <https://developer.android.com/studio/publish/app-signing>.
+
+## Milk fed to calves
+
+On **Log milking**, *Milk for calves* records litres that were milked but fed
+to calves instead of sold. It is saved with the session and taken off the
+litres sold and the milk sales value; the Today page, Money tab and PDF report
+show it separately. The session chart still shows the full amount milked.
+
+## Name and package
+
+The app is called **DairyDesk**. Its Android package stays `com.dairypulse.app`
+so installed copies update in place and keep their records and Google backup.
 
 ## Look and feel
 

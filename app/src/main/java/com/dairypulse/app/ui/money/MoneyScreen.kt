@@ -191,7 +191,11 @@ private fun PnlCard(pnl: ProfitAndLoss, cur: String, period: PnlPeriod, feedKg: 
                 }
             }
         }
-        PnlLineRow("Milk sales", "${num(pnl.milkLiters)} litres sold", money(cur, pnl.milkSales), Dp.GreenValue)
+        PnlLineRow(
+            "Milk sales",
+            "${num(pnl.milkLiters)} litres sold" + if (pnl.milkToCalves > 0) " · ${num(pnl.milkToCalves)} L to calves" else "",
+            money(cur, pnl.milkSales), Dp.GreenValue,
+        )
         pnl.otherIncome.forEach { PnlLineRow(it.label, "other income", money(cur, it.amount), Dp.GreenValue) }
         PnlLineRow("Feed cost", "${num(feedKg)} kg fed", money(cur, -pnl.feedCost), Dp.Clay)
         pnl.expenses.forEach { PnlLineRow(it.label, null, money(cur, -it.amount), Dp.Clay) }

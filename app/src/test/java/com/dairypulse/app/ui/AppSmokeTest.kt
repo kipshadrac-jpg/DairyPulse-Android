@@ -11,6 +11,7 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import com.dairypulse.app.DairyPulseApp
 import com.dairypulse.app.MainActivity
@@ -89,10 +90,16 @@ class AppSmokeTest {
         waitForText("Daisy")
         rule.onNodeWithText("Midday").performClick()
         rule.onAllNodes(hasSetTextAction() and hasContentDescription("Litres for", substring = true)).onFirst().performTextInput("12.5")
+        // Milk fed to calves comes off what is sold.
+        rule.onNode(hasSetTextAction() and hasContentDescription("Milk for calves (subtracted)")).performScrollTo().performTextInput("2.5")
+        waitForText("10 L")
         shot("02_log_milking")
-        rule.onNodeWithText("Save midday milking").performClick()
+        rule.onNodeWithText("Save midday milking").performScrollTo().performClick()
         rule.waitForIdle()
         waitForText("12.5 L")
+        waitForText("2.5 L to calves")
+        val saved = runBlocking { app.db.milk().forSession(today, Session.MIDDAY) }
+        check(saved.single { it.forCalves }.liters == 2.5) { "calf milk not saved: $saved" }
         shot("01_today")
         tab("Feed")
         waitForText("KSh 50.00")

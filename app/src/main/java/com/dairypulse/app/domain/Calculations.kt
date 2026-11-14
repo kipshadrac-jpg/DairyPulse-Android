@@ -62,9 +62,10 @@ fun isCalvingSoon(cow: Cow, today: LocalDate): Boolean =
 
 data class SessionRow(val session: Session, val liters: Double, val vsMorningPct: Double?)
 
-/** Litres per session, each compared with the morning baseline. */
+/** Litres milked per session (before any milk is fed to calves), each compared with the morning baseline. */
 fun sessionMatrix(records: List<MilkRecord>): List<SessionRow> {
-    val totals = Session.entries.associateWith { s -> records.filter { it.session == s }.sumOf { it.liters } }
+    val milked = records.filter { !it.forCalves }
+    val totals = Session.entries.associateWith { s -> milked.filter { it.session == s }.sumOf { it.liters } }
     val morning = totals.getValue(Session.MORNING)
     return Session.entries.map { s ->
         val liters = totals.getValue(s)
@@ -82,12 +83,15 @@ data class PnlLine(val label: String, val amount: Double)
 data class ProfitAndLoss(
     val from: LocalDate,
     val to: LocalDate,
+    /** Litres sold: milked minus what was fed to calves. */
     val milkLiters: Double,
     val milkSales: Double,
     val otherIncome: List<PnlLine>,
     val feedCost: Double,
     val expenses: List<PnlLine>,
+    val milkToCalves: Double = 0.0,
 ) {
+    val milkProduced get() = milkLiters + milkToCalves
     val totalRevenue get() = milkSales + otherIncome.sumOf { it.amount }
     val totalExpenses get() = feedCost + expenses.sumOf { it.amount }
     val netProfit get() = totalRevenue - totalExpenses
@@ -132,11 +136,14 @@ fun profitAndLoss(
     txIn.filter { it.type == TxType.INCOME }
         .forEach { incomeByCategory.merge(it.category, it.amount, Double::plus) }
 
+    // Milk fed to calves is logged as its own record and comes off the litres and value sold.
+    fun MilkRecord.signed() = if (forCalves) -liters else liters
     return ProfitAndLoss(
         from = from,
         to = to,
-        milkLiters = milkIn.sumOf { it.liters },
-        milkSales = milkIn.sumOf { it.liters * it.pricePerLiter },
+        milkLiters = milkIn.sumOf { it.signed() },
+        milkSales = milkIn.sumOf { it.signed() * it.pricePerLiter },
+        milkToCalves = milkIn.filter { it.forCalves }.sumOf { it.liters },
         otherIncome = incomeByCategory.map { PnlLine(it.key, it.value) },
         feedCost = feed.filter { it.date.inRange() }.sumOf { it.cost },
         expenses = expenseByCategory.map { PnlLine(it.key, it.value) }.sortedByDescending { it.amount },

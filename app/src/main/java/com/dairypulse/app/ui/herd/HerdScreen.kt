@@ -1,13 +1,18 @@
 package com.dairypulse.app.ui.herd
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -26,19 +31,24 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.material3.Text
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dairypulse.app.data.Cow
 import com.dairypulse.app.data.CowStatus
 import com.dairypulse.app.domain.calfCost
-import com.dairypulse.app.domain.daysInMilk
 import com.dairypulse.app.domain.daysUntilCalving
 import com.dairypulse.app.domain.isCalvingSoon
 import com.dairypulse.app.ui.common.AlertBanner
-import com.dairypulse.app.ui.common.Avatar
-import com.dairypulse.app.ui.common.Badge
+import com.dairypulse.app.ui.common.CowAvatar
+import com.dairypulse.app.ui.common.CowPhoto
 import com.dairypulse.app.ui.common.DpCard
 import com.dairypulse.app.ui.common.LegendDot
 import com.dairypulse.app.ui.common.Muted
@@ -48,11 +58,11 @@ import com.dairypulse.app.ui.common.Segmented
 import com.dairypulse.app.ui.common.Serif
 import com.dairypulse.app.ui.common.SplitBar
 import com.dairypulse.app.ui.common.Strong
-import com.dairypulse.app.ui.common.num
 import com.dairypulse.app.ui.common.pretty
 import com.dairypulse.app.ui.common.rememberApp
 import com.dairypulse.app.ui.common.whole
 import com.dairypulse.app.ui.theme.Dp
+import com.dairypulse.app.ui.theme.Manrope
 import java.time.LocalDate
 
 private enum class HerdFilter { ALL, IN_MILK, DRY, SOLD }
@@ -63,7 +73,6 @@ fun HerdScreen(onOpenCow: (Long) -> Unit) {
     val cur = app.settings.settings.collectAsState().value.currency
     val today = remember { LocalDate.now() }
     val cows by remember { app.db.cows().all() }.collectAsStateWithLifecycle(emptyList())
-    val milkToday by remember { app.db.milk().between(today, today) }.collectAsStateWithLifecycle(emptyList())
     val calfExpenses by remember { app.db.money().calfExpenses() }.collectAsStateWithLifecycle(emptyList())
     var filter by rememberSaveable { mutableStateOf(HerdFilter.ALL) }
 
@@ -102,9 +111,12 @@ fun HerdScreen(onOpenCow: (Long) -> Unit) {
             }
             if (cows.isEmpty()) Muted("No animals yet. Tap \"Add animal\" to register your cows, heifers and calves.", size = 15)
 
-            shown.forEach { cow ->
-                val records = milkToday.filter { it.cowId == cow.id }
-                CowCard(cow, today, records.sumOf { it.liters }, records.map { it.session }.distinct().size) { onOpenCow(cow.id) }
+            // Two photo cards per row; both cards in a row share the taller one's height.
+            shown.chunked(2).forEach { pair ->
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    pair.forEach { cow -> CowCard(cow, today, Modifier.weight(1f).fillMaxHeight()) { onOpenCow(cow.id) } }
+                    if (pair.size == 1) Spacer(Modifier.weight(1f))
+                }
             }
 
             if (filter != HerdFilter.SOLD && young.isNotEmpty()) {
@@ -113,7 +125,8 @@ fun HerdScreen(onOpenCow: (Long) -> Unit) {
                     val cost = calfCost(calf.id, calfExpenses)
                     DpCard(onClick = { onOpenCow(calf.id) }) {
                         Row {
-                            Column(Modifier.weight(1f).padding(end = 12.dp)) {
+                            CowAvatar(calf.photo, calf.name, 48.dp)
+                            Column(Modifier.weight(1f).padding(start = 12.dp, end = 12.dp)) {
                                 Row(verticalAlignment = Alignment.Bottom) {
                                     Serif(calf.name, 19)
                                     if (calf.tag.isNotBlank()) Muted("  #${calf.tag}")
@@ -155,40 +168,35 @@ fun HerdScreen(onOpenCow: (Long) -> Unit) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+/** Photo card: square picture, then the name and "tag · status", two to a row. */
 @Composable
-private fun CowCard(cow: Cow, today: LocalDate, litersToday: Double, sessions: Int, onClick: () -> Unit) {
+private fun CowCard(cow: Cow, today: LocalDate, modifier: Modifier, onClick: () -> Unit) {
     val soon = isCalvingSoon(cow, today)
-    val milking = cow.status == CowStatus.IN_MILK
-    DpCard(onClick = onClick, border = if (soon) Dp.ClayBorder else Dp.Border, padding = 16.dp) {
-        Row {
-            Avatar(cow.name, background = if (milking) Dp.GreenPill else Color(0xFFE6E0D2), color = if (milking) Dp.GreenDark else Dp.Neutral)
-            Column(Modifier.weight(1f).padding(start = 14.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Row(Modifier.weight(1f), verticalAlignment = Alignment.Bottom) {
-                        Serif(cow.name, 19)
-                        if (cow.tag.isNotBlank()) Muted("  #${cow.tag}")
-                    }
-                    if (milking) Serif("${num(litersToday)} L", 19, color = Dp.Green)
-                }
-                FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (milking) Badge("In milk", Dp.GreenPill, Dp.GreenDark) else Badge(cow.status.label, Color(0xFFE6E0D2), Dp.Neutral)
-                    if (milking) daysInMilk(cow, today)?.let { Badge("$it days in milk", Dp.NeutralTint, Dp.Neutral) }
-                    if (milking) Badge("$sessions ${if (sessions == 1) "session" else "sessions"}", Dp.NeutralTint, Dp.Neutral)
-                }
-                daysUntilCalving(cow, today)?.let { days ->
-                    Muted(
-                        when {
-                            days < 0 -> "Calving overdue by ${-days} days · action needed"
-                            soon -> "Calving in $days days · action needed"
-                            else -> "Calving in $days days"
-                        },
-                        Modifier.padding(top = 8.dp),
-                        color = if (soon) Dp.Clay else Dp.Muted,
-                        weight = if (soon) FontWeight.Bold else FontWeight.SemiBold,
-                    )
-                }
-            }
-        }
+    val shape = RoundedCornerShape(22.dp)
+    val status = when {
+        soon -> daysUntilCalving(cow, today)!!.let { if (it < 0) "Calving overdue" else "Calving in $it days" }
+        cow.status == CowStatus.IN_MILK -> "In milk"
+        else -> cow.status.label
+    }
+    Column(
+        modifier.clip(shape).background(Dp.Card).border(1.dp, if (soon) Dp.ClayBorder else Dp.Border, shape)
+            .clickable(role = Role.Button, onClick = onClick).padding(14.dp),
+    ) {
+        CowPhoto(
+            cow.photo, cow.name, Modifier.fillMaxWidth().aspectRatio(1f), RoundedCornerShape(16.dp),
+            maxPx = 512, initialSize = 52, muted = cow.status != CowStatus.IN_MILK,
+        )
+        Text(
+            cow.name, Modifier.padding(top = 14.dp), maxLines = 1, overflow = TextOverflow.Ellipsis,
+            style = TextStyle(fontFamily = Manrope, fontSize = 19.sp, fontWeight = FontWeight.SemiBold, color = Dp.Ink),
+        )
+        Text(
+            listOfNotNull(cow.tag.takeIf { it.isNotBlank() }, status).joinToString(" · "),
+            Modifier.padding(top = 4.dp),
+            style = TextStyle(
+                fontFamily = Manrope, fontSize = 15.sp, lineHeight = 20.sp,
+                fontWeight = if (soon) FontWeight.Bold else FontWeight.Medium, color = if (soon) Dp.Clay else Dp.Muted,
+            ),
+        )
     }
 }

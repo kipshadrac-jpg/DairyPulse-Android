@@ -9,6 +9,8 @@ data class FarmSettings(
     val farmName: String = "My Dairy Farm",
     val currency: String = "KSh",
     val milkPricePerLiter: Double = 50.0,
+    /** File name of the farm cover photo shown on the Today page, if one was added. */
+    val coverPhoto: String? = null,
 )
 
 /** Small settings store on SharedPreferences, which Auto Backup also copies. */
@@ -30,6 +32,7 @@ class SettingsStore(context: Context) {
         farmName = prefs.getString("farmName", null) ?: FarmSettings().farmName,
         currency = prefs.getString("currency", null) ?: FarmSettings().currency,
         milkPricePerLiter = prefs.getFloat("milkPrice", FarmSettings().milkPricePerLiter.toFloat()).toDouble(),
+        coverPhoto = prefs.getString("coverPhoto", null),
     )
 
     fun save(settings: FarmSettings) {
@@ -37,6 +40,7 @@ class SettingsStore(context: Context) {
             .putString("farmName", settings.farmName)
             .putString("currency", settings.currency)
             .putFloat("milkPrice", settings.milkPricePerLiter.toFloat())
+            .putString("coverPhoto", settings.coverPhoto)
             .apply()
         state.value = settings
     }

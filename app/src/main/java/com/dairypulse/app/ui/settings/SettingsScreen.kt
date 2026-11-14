@@ -2,12 +2,14 @@ package com.dairypulse.app.ui.settings
 
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -20,9 +22,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.CloudUpload
+import androidx.compose.material.icons.outlined.Landscape
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,21 +36,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.dairypulse.app.data.FarmSettings
+import com.dairypulse.app.data.Photos
 import com.dairypulse.app.ui.common.DpCard
 import com.dairypulse.app.ui.common.Label
 import com.dairypulse.app.ui.common.Muted
 import com.dairypulse.app.ui.common.NumberField
 import com.dairypulse.app.ui.common.OutlineButton
+import com.dairypulse.app.ui.common.PhotoActions
 import com.dairypulse.app.ui.common.PrimaryButton
 import com.dairypulse.app.ui.common.Serif
 import com.dairypulse.app.ui.common.Strong
 import com.dairypulse.app.ui.common.TextInput
 import com.dairypulse.app.ui.common.num
 import com.dairypulse.app.ui.common.rememberApp
+import com.dairypulse.app.ui.common.rememberPhoto
+import com.dairypulse.app.ui.common.rememberPhotoPicker
 import com.dairypulse.app.ui.common.toAmount
 import com.dairypulse.app.ui.theme.Dp
 
@@ -61,6 +69,14 @@ fun SettingsScreen(onDone: () -> Unit) {
     var currency by remember { mutableStateOf(current.currency) }
     var price by remember { mutableStateOf(num(current.milkPricePerLiter, 2)) }
     val priceValue = price.toAmount()
+    val coverPhoto = app.settings.settings.collectAsState().value.coverPhoto
+    // The cover photo is saved as soon as it is picked or removed.
+    fun setCover(name: String?) {
+        val old = app.settings.settings.value
+        app.settings.save(old.copy(coverPhoto = name))
+        if (old.coverPhoto != name) Photos.delete(context, old.coverPhoto)
+    }
+    val coverPicker = rememberPhotoPicker(Photos.COVER_SIDE) { setCover(it) }
 
     Column(
         Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
@@ -78,12 +94,34 @@ fun SettingsScreen(onDone: () -> Unit) {
                 PrimaryButton(
                     "Save",
                     onClick = {
-                        app.settings.save(FarmSettings(farmName.trim(), currency.trim(), priceValue!!))
+                        app.settings.save(
+                            app.settings.settings.value.copy(farmName = farmName.trim(), currency = currency.trim(), milkPricePerLiter = priceValue!!),
+                        )
                         onDone()
                     },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = farmName.isNotBlank() && currency.isNotBlank() && priceValue != null && priceValue > 0,
                 )
+            }
+        }
+
+        DpCard {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Serif("Farm cover photo", 22)
+                Muted("Shown behind your farm name at the top of the Today page.")
+                val cover = rememberPhoto(coverPhoto, 1000)
+                Box(
+                    Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(18.dp))
+                        .background(if (cover == null) Dp.heroGradient else androidx.compose.ui.graphics.SolidColor(Color.Transparent)),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (cover != null) {
+                        Image(cover, "Farm cover photo", Modifier.matchParentSize(), contentScale = ContentScale.Crop)
+                    } else {
+                        Icon(Icons.Outlined.Landscape, null, tint = Color.White.copy(alpha = 0.8f), modifier = Modifier.size(44.dp))
+                    }
+                }
+                PhotoActions(coverPicker, hasPhoto = coverPhoto != null, onRemove = { setCover(null) })
             }
         }
 

@@ -1,5 +1,6 @@
 package com.dairypulse.app.data
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -44,6 +45,8 @@ data class Cow(
     val expectedCalvingDate: LocalDate? = null,
     val damId: Long? = null,
     val notes: String = "",
+    /** File name of the cow's photo in the app's private photos folder, if one was added. */
+    val photo: String? = null,
 ) {
     val displayName get() = if (tag.isBlank()) name else "$name (#$tag)"
 }
@@ -58,6 +61,8 @@ data class MilkRecord(
     val liters: Double,
     /** Price per litre at the time of logging, so price changes don't rewrite history. */
     val pricePerLiter: Double,
+    /** Milk fed to calves: produced on the farm but not sold, so it is taken off the sales. */
+    @ColumnInfo(defaultValue = "0") val forCalves: Boolean = false,
 )
 
 @Entity(tableName = "ingredients")
