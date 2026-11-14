@@ -33,7 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dairypulse.app.data.CowStatus
 import com.dairypulse.app.data.MilkRecord
 import com.dairypulse.app.data.Session
-import com.dairypulse.app.ui.common.Avatar
+import com.dairypulse.app.ui.common.CowAvatar
 import com.dairypulse.app.ui.common.CompactNumber
 import com.dairypulse.app.ui.common.DateField
 import com.dairypulse.app.ui.common.Label
@@ -54,7 +54,8 @@ import java.time.LocalDate
 
 /**
  * Log one milking session. Litres can be entered per cow (feeds the Herd yields and
- * "Head milked") and/or as one bulk figure. Re-opening the same date + session edits it.
+ * "Head milked") and/or as one bulk figure. Milk fed to calves is entered separately and comes
+ * off the litres and value sold. Re-opening the same date + session edits it.
  */
 @Composable
 fun LogMilkingScreen(onDone: () -> Unit) {
@@ -67,6 +68,7 @@ fun LogMilkingScreen(onDone: () -> Unit) {
     var session by remember { mutableStateOf(currentSession()) }
     var price by remember { mutableStateOf(num(settings.milkPricePerLiter, 2)) }
     var bulk by remember { mutableStateOf("") }
+    var calves by remember { mutableStateOf("") }
     val perCow = remember { mutableStateMapOf<Long, String>() }
     var editing by remember { mutableStateOf(false) }
 
@@ -75,14 +77,22 @@ fun LogMilkingScreen(onDone: () -> Unit) {
         val existing = app.db.milk().forSession(date, session)
         perCow.clear()
         bulk = ""
+        calves = ""
         existing.forEach { r ->
-            if (r.cowId == null) bulk = num(r.liters, 2) else perCow[r.cowId] = num(r.liters, 2)
+            when {
+                r.forCalves -> calves = num(r.liters, 2)
+                r.cowId == null -> bulk = num(r.liters, 2)
+                else -> perCow[r.cowId] = num(r.liters, 2)
+            }
         }
         existing.firstOrNull()?.let { price = num(it.pricePerLiter, 2) }
         editing = existing.isNotEmpty()
     }
 
     val total = perCow.values.sumOf { it.toAmount() ?: 0.0 } + (bulk.toAmount() ?: 0.0)
+    val toCalves = calves.toAmount() ?: 0.0
+    val sold = total - toCalves
+    val tooMuchForCalves = toCalves > total
     val priceValue = price.toAmount() ?: 0.0
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(20.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
@@ -111,7 +121,7 @@ fun LogMilkingScreen(onDone: () -> Unit) {
             Column(Modifier.fillMaxWidth().clip(shape).background(Dp.Card)) {
                 if (!first) Box(Modifier.padding(horizontal = 16.dp)) { RowDivider() }
                 Row(Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Avatar(cow.name, 40.dp)
+                    CowAvatar(cow.photo, cow.name, 40.dp)
                     Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Strong(cow.name)
@@ -124,6 +134,14 @@ fun LogMilkingScreen(onDone: () -> Unit) {
         item {
             Column(Modifier.padding(top = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 NumberField(bulk, { bulk = it }, if (inMilk.isEmpty()) "Total litres" else "Extra or untagged litres (optional)", suffix = "L")
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    NumberField(calves, { calves = it }, "Milk for calves (subtracted)", suffix = "L")
+                    if (tooMuchForCalves) {
+                        Muted("More than was milked this session.", color = Dp.Clay, weight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+                    } else {
+                        Muted("Fed to calves, not sold: taken off the litres and value sold.")
+                    }
+                }
                 Column(
                     Modifier.fillMaxWidth().clip(RoundedCornerShape(22.dp)).background(Dp.CreamDeep)
                         .border(1.dp, Dp.Border, RoundedCornerShape(22.dp)).padding(18.dp),
@@ -131,13 +149,18 @@ fun LogMilkingScreen(onDone: () -> Unit) {
                 ) {
                     Row(verticalAlignment = Alignment.Bottom) {
                         Column(Modifier.weight(1f)) {
-                            Label("Session total")
+                            Label(if (toCalves > 0) "Milked" else "Session total")
                             Serif("${num(total)} L", 30, Modifier.padding(top = 4.dp), color = Dp.GreenValue)
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Label("Value")
-                            Strong(money(settings.currency, total * priceValue), size = 18, modifier = Modifier.padding(top = 6.dp))
+                            Strong(money(settings.currency, sold.coerceAtLeast(0.0) * priceValue), size = 18, modifier = Modifier.padding(top = 6.dp))
                         }
+                    }
+                    if (toCalves > 0) {
+                        RowDivider()
+                        SummaryLine("To calves", "− ${num(toCalves)} L", Dp.Clay)
+                        SummaryLine("Sold", "${num(sold.coerceAtLeast(0.0))} L", Dp.GreenValue)
                     }
                     PrimaryButton(
                         if (editing) "Update ${session.label.lowercase()} milking" else "Save ${session.label.lowercase()} milking",
@@ -148,16 +171,25 @@ fun LogMilkingScreen(onDone: () -> Unit) {
                                     if (l != null && l > 0) add(MilkRecord(0, date, session, id, l, priceValue))
                                 }
                                 bulk.toAmount()?.takeIf { it > 0 }?.let { add(MilkRecord(0, date, session, null, it, priceValue)) }
+                                toCalves.takeIf { it > 0 }?.let { add(MilkRecord(0, date, session, null, it, priceValue, forCalves = true)) }
                             }
                             app.launchIo { milk().replaceSession(date, session, records) }
                             onDone()
                         },
                         modifier = Modifier.fillMaxWidth(),
                         icon = Icons.Outlined.Check,
-                        enabled = priceValue > 0 && (total > 0 || editing),
+                        enabled = priceValue > 0 && (total > 0 || editing) && !tooMuchForCalves,
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SummaryLine(label: String, value: String, color: androidx.compose.ui.graphics.Color) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Muted(label, Modifier.weight(1f), size = 15, color = Dp.Neutral, weight = androidx.compose.ui.text.font.FontWeight.SemiBold)
+        Strong(value, size = 16, color = color)
     }
 }

@@ -57,6 +57,21 @@ class CalculationsTest {
         assertNull(sessionMatrix(records.dropLast(1))[2].vsMorningPct)
     }
 
+    @Test fun milkForCalvesComesOffSales() {
+        val milk = listOf(
+            MilkRecord(0, day, Session.MORNING, 1, 12.0, 70.0),
+            MilkRecord(0, day, Session.MORNING, null, 3.0, 70.0),
+            MilkRecord(0, day, Session.MORNING, null, 4.0, 70.0, forCalves = true),
+        )
+        val pnl = profitAndLoss(day, day, milk, emptyList(), emptyList(), emptyList(), emptyList())
+        assertEquals(15.0, pnl.milkProduced, 1e-9)
+        assertEquals(4.0, pnl.milkToCalves, 1e-9)
+        assertEquals(11.0, pnl.milkLiters, 1e-9)
+        assertEquals(11 * 70.0, pnl.milkSales, 1e-9)
+        // The session chart shows what was milked, before calves are fed.
+        assertEquals(15.0, sessionMatrix(milk)[0].liters, 1e-9)
+    }
+
     @Test fun profitAndLossAddsEverythingUp() {
         val pnl = profitAndLoss(
             from = day, to = day,

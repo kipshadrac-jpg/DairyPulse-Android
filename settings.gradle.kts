@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "DairyPulse"
+rootProject.name = "DairyDesk"
 include(":app")

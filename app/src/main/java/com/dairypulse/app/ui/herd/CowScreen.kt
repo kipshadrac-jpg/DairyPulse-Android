@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -31,18 +32,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.dairypulse.app.data.CalfCostType
 import com.dairypulse.app.data.CalfExpense
 import com.dairypulse.app.data.Cow
 import com.dairypulse.app.data.CowStatus
+import com.dairypulse.app.data.Photos
 import com.dairypulse.app.domain.calfCost
 import com.dairypulse.app.domain.daysInMilk
 import com.dairypulse.app.domain.daysUntilCalving
 import com.dairypulse.app.domain.isCalvingSoon
 import com.dairypulse.app.ui.common.AddPill
-import com.dairypulse.app.ui.common.Avatar
+import com.dairypulse.app.ui.common.CowAvatar
+import com.dairypulse.app.ui.common.CowPhoto
+import com.dairypulse.app.ui.common.PhotoActions
 import com.dairypulse.app.ui.common.DangerTextButton
 import com.dairypulse.app.ui.common.DateField
 import com.dairypulse.app.ui.common.DpCard
@@ -63,6 +68,7 @@ import com.dairypulse.app.ui.common.money
 import com.dairypulse.app.ui.common.num
 import com.dairypulse.app.ui.common.pretty
 import com.dairypulse.app.ui.common.rememberApp
+import com.dairypulse.app.ui.common.rememberPhotoPicker
 import com.dairypulse.app.ui.common.toAmount
 import com.dairypulse.app.ui.theme.Dp
 import java.time.LocalDate
@@ -73,6 +79,7 @@ private const val GESTATION_DAYS = 283L
 @Composable
 fun CowScreen(cowId: Long, onDone: () -> Unit) {
     val app = rememberApp()
+    val context = LocalContext.current
     val cur = app.settings.settings.value.currency
     val today = remember { LocalDate.now() }
     val cows by remember { app.db.cows().all() }.collectAsStateWithLifecycle(emptyList())
@@ -90,6 +97,12 @@ fun CowScreen(cowId: Long, onDone: () -> Unit) {
     var expectedCalving by remember { mutableStateOf<LocalDate?>(null) }
     var damId by remember { mutableStateOf<Long?>(null) }
     var notes by remember { mutableStateOf("") }
+    var photo by remember { mutableStateOf<String?>(null) }
+    val picker = rememberPhotoPicker(Photos.COW_SIDE) { picked ->
+        // Drop an earlier pick from this visit that was never saved.
+        if (photo != original?.photo) Photos.delete(context, photo)
+        photo = picked
+    }
     var addExpense by remember { mutableStateOf(false) }
     var confirmDelete by remember { mutableStateOf(false) }
 
@@ -98,7 +111,7 @@ fun CowScreen(cowId: Long, onDone: () -> Unit) {
             app.db.cows().get(cowId)?.let { c ->
                 original = c; name = c.name; tag = c.tag; status = c.status; female = c.isFemale
                 birth = c.birthDate; lastCalving = c.lastCalvingDate; expectedCalving = c.expectedCalvingDate
-                damId = c.damId; notes = c.notes
+                damId = c.damId; notes = c.notes; photo = c.photo
             }
             loaded = true
         }
@@ -111,7 +124,17 @@ fun CowScreen(cowId: Long, onDone: () -> Unit) {
         Modifier.verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        original?.let { cow -> Summary(cow, today, history.filter { it.date == today }.sumOf { it.liters }) }
+        original?.let { cow -> Summary(cow.copy(photo = photo), today, history.filter { it.date == today }.sumOf { it.liters }) }
+
+        SectionHeader("Photo")
+        CowPhoto(
+            photo, name.ifBlank { "?" }, Modifier.fillMaxWidth().aspectRatio(1f), RoundedCornerShape(22.dp),
+            maxPx = Photos.COW_SIDE, initialSize = 96,
+        )
+        PhotoActions(picker, hasPhoto = photo != null, onRemove = {
+            if (photo != original?.photo) Photos.delete(context, photo)
+            photo = null
+        })
 
         SectionHeader("Details")
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -145,8 +168,10 @@ fun CowScreen(cowId: Long, onDone: () -> Unit) {
                 val cow = (original ?: Cow(tag = "", name = "", status = status)).copy(
                     name = name.trim(), tag = tag.trim(), status = status, isFemale = female, birthDate = birth,
                     lastCalvingDate = lastCalving, expectedCalvingDate = expectedCalving, damId = damId, notes = notes.trim(),
+                    photo = photo,
                 )
-                app.launchIo { cows().upsert(cow) }
+                val replaced = original?.photo?.takeIf { it != photo }
+                app.launchIo { cows().upsert(cow); Photos.delete(context.applicationContext, replaced) }
                 onDone()
             },
             modifier = Modifier.fillMaxWidth(),
@@ -207,7 +232,12 @@ fun CowScreen(cowId: Long, onDone: () -> Unit) {
                 title = { Serif("Delete ${cow.name}?", 22) },
                 text = { Muted("This removes the animal and its rearing costs. Milk already logged stays in the totals.", size = 15) },
                 confirmButton = {
-                    TextButton(onClick = { app.launchIo { cows().delete(cow) }; confirmDelete = false; onDone() }) {
+                    TextButton(onClick = {
+                        val photos = listOfNotNull(cow.photo, photo).distinct()
+                        app.launchIo { cows().delete(cow); photos.forEach { Photos.delete(context.applicationContext, it) } }
+                        confirmDelete = false
+                        onDone()
+                    }) {
                         Text("Delete", color = Dp.Clay)
                     }
                 },
@@ -222,7 +252,7 @@ private fun Summary(cow: Cow, today: LocalDate, litersToday: Double) {
     val milking = cow.status == CowStatus.IN_MILK
     DpCard {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Avatar(cow.name, 60.dp, if (milking) Dp.GreenPill else Color(0xFFE6E0D2), if (milking) Dp.GreenDark else Dp.Neutral)
+            CowAvatar(cow.photo, cow.name, 60.dp, muted = !milking)
             Column(Modifier.padding(start = 14.dp)) {
                 Serif(cow.name, 26)
                 Muted(listOfNotNull(cow.tag.takeIf { it.isNotBlank() }?.let { "#$it" }, if (cow.isFemale) "Female" else "Male", cow.status.label).joinToString(" · "), size = 14)

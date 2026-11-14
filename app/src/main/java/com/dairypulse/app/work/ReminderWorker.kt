@@ -52,8 +52,8 @@ class ReminderWorker(context: Context, params: WorkerParameters) : CoroutineWork
             ctx, 0, Intent(ctx, MainActivity::class.java), PendingIntent.FLAG_IMMUTABLE,
         )
         val n = NotificationCompat.Builder(ctx, CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
-            .setContentTitle("DairyPulse: $count item(s) need attention")
+            .setSmallIcon(R.drawable.ic_notification)
+            .setContentTitle("DairyDesk: $count item(s) need attention")
             .setContentText(lines.first())
             .setStyle(NotificationCompat.BigTextStyle().bigText(lines.joinToString("\n")))
             .setContentIntent(open)
